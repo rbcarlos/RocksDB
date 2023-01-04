@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# we are fixing the -num param in total number rather than number per thread
+# the total number impacts the possibility of compactions in write benchmarks
+# 2,000,000 was the total number that included compaction to level 1 as well
+TOTAL_NUM=2000000
+
+for NUM_THREADS in {1..32}
+do
+    let NUM_PER_THREAD=$(($TOTAL_NUM / $NUM_THREADS))
+    echo $NUM_THREADS "threads,"
+    echo $NUM_PER_THREAD "ops per thread \n"
+
+    # vary the sizes to increase/ decrease congestion 
+    for KEY_SIZE in 8 16 32
+    do
+        # remove past experiments
+        rm DBs/*
+
+        # record user and system times
+        
+        { time ./db_bench -benchmarks=fillseq -use_existing_db=0 -db=DBs -wal_dir=DBs -key_size=$KEY_SIZE -value_size=100 -num=$NUM_PER_THREAD -compression_type=none -threads=$NUM_THREADS >/dev/null 2>&1; } 2> "perf_out_seq/write_seq_"$NUM_THREADS"threads_"$KEY_SIZE"keys.time"
+       
+        # remove past experiments
+        rm DBs/*
+
+        # record user and system times
+        perf stat -o "perf_out_seq/perf_stat_write_seq_"$NUM_THREADS"threads_"$KEY_SIZE"keys.txt" ./db_bench -benchmarks=fillseq -use_existing_db=0 -db=DBs -wal_dir=DBs -key_size=$KEY_SIZE -value_size=100 -num=$NUM_PER_THREAD -compression_type=none -threads=$NUM_THREADS 
+        
+        # remove past experiments
+        rm DBs/*
+
+        # record the traces of different experiments
+        perf record -g -o "perf_out_seq/perf_write_seq_"$NUM_THREADS"threads_"$KEY_SIZE"keys.data" ./db_bench -benchmarks=fillrandom -use_existing_db=0 -db=DBs -wal_dir=DBs -key_size=$KEY_SIZE -value_size=100 -num=$NUM_PER_THREAD -compression_type=none -threads=$NUM_THREADS
+
+        # create flame graphs out of them
+        perf script -i "perf_out_seq/perf_write_seq_"$NUM_THREADS"threads_"$KEY_SIZE"keys.data" | ../FlameGraph/stackcollapse-perf.pl > out.perf-folded
+        cat out.perf-folded | ../FlameGraph/flamegraph.pl > "perf_out_seq/perf-dbbench_write_seq_"$NUM_THREADS"threads_"$KEY_SIZE"keys.svg"
+    done
+done

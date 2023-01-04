@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# we are fixing the -num param in total number rather than number per thread
+# the total number impacts the possibility of compactions in write benchmarks
+# 2,000,000 was the total number that included compaction to level 1 as well
+TOTAL_NUM=2000000
+KEY_SIZE=16
+
+for NUM_THREADS in 1 2 4 8 16
+do
+
+    let NUM_PER_THREAD=$(($TOTAL_NUM / $NUM_THREADS))
+    echo $NUM_THREADS "threads,"
+    echo $NUM_PER_THREAD "ops per thread \n"
+
+    for REP in {1..10}
+    do
+        # remove past experiments
+        rm DBs/*
+
+        # record user and system times
+        
+        { time ./db_bench -benchmarks=fillrandom -use_existing_db=0 -db=DBs -wal_dir=DBs -key_size=$KEY_SIZE -value_size=100 -num=$NUM_PER_THREAD -compression_type=none -threads=$NUM_THREADS >/dev/null 2>&1; } 2> "time_out/baseline_rep"$REP"_threads"$NUM_THREADS".time"
+
+        # remove past experiments
+        rm DBs/*
+
+        # record user and system times
+        { time perf stat -o /dev/null ./db_bench -benchmarks=fillrandom -use_existing_db=0 -db=DBs -wal_dir=DBs -key_size=$KEY_SIZE -value_size=100 -num=$NUM_PER_THREAD -compression_type=none -threads=$NUM_THREADS >/dev/null 2>&1; } 2> "time_out/perf_stat_rep"$REP"_threads"$NUM_THREADS".time"
+
+        # remove past experiments
+        rm DBs/*
+
+        # record the traces of different experiments
+        { time perf record -g -o /dev/null ./db_bench -benchmarks=fillrandom -use_existing_db=0 -db=DBs -wal_dir=DBs -key_size=$KEY_SIZE -value_size=100 -num=$NUM_PER_THREAD -compression_type=none -threads=$NUM_THREADS >/dev/null 2>&1; } 2> "time_out/perf_record_rep"$REP"_threads"$NUM_THREADS".time"
+    done
+done
